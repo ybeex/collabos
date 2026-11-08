@@ -1,0 +1,37 @@
+{
+  // Bug fix: this used to have a `paths` override aliasing @collabos/shared
+  // and @collabos/db straight to their raw `src/index.ts`. That's
+  // incompatible with this tsconfig's `outDir`/`rootDir` emit settings —
+  // tsc has to compute each emitted file's output path relative to
+  // `rootDir`, and source pulled in from outside apps/api/src (i.e. the
+  // aliased packages) has no valid relative path, which is exactly
+  // TS6059 ("File is not under 'rootDir'"). Removed now that both
+  // packages' package.json `main`/`types` correctly point at their built
+  // `dist/` output (see packages/shared and packages/db package.json),
+  // so normal npm-workspace node_modules resolution takes over instead.
+  // Practical effect: editing packages/shared or packages/db now requires
+  // rebuilding them (`npm run build -w packages/shared`, etc.) before
+  // apps/api picks up the change — same as apps/web already required.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

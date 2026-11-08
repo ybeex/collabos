@@ -1,0 +1,32 @@
+version: '3.9'
+
+# Self-hosted Ollama — free LLM inference and embeddings
+# nomic-embed-text: 768-dim embeddings, runs on CPU, ~270MB model
+# Start: docker compose -f docker/ollama/docker-compose.yml up -d
+# Then pull model: docker compose exec ollama ollama pull nomic-embed-text
+
+services:
+  ollama:
+    image: ollama/ollama:0.3.6
+    restart: unless-stopped
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: '5m'       # Keep model loaded for 5 minutes after last use
+      OLLAMA_MAX_LOADED_MODELS: '2' # Max models in memory simultaneously
+      OLLAMA_NUM_PARALLEL: '2'      # Parallel requests per model
+    deploy:
+      resources:
+        limits:
+          memory: 4g  # nomic-embed-text needs ~1GB; allow headroom for other models
+    healthcheck:
+      test: ['CMD', 'ollama', 'list']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s  # Give Ollama time to start
+
+volumes:
+  ollama_data:

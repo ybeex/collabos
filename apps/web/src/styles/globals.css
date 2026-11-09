@@ -1,0 +1,402 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PRD_AUDIT.md Finding #8 (accessibility) — PRD §08: "Reduced-motion mode
+   for vestibular disorder users." Global override, placed early so nothing
+   below can out-specificity it. Catches every `animate-*` Tailwind utility
+   and every custom @keyframes animation in this file (blink, marquee,
+   slide-down, slide-up — see bottom of file) plus anything in the
+   marketing SVGs, without needing per-component opt-in. Does NOT catch
+   JS-driven `scrollIntoView({ behavior: 'smooth' })` calls, since those are
+   not CSS transitions — those are gated individually at their call sites
+   via lib/utils.ts's prefersReducedMotion() (channel-view.tsx,
+   doc-view.tsx). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* premium-ui-elevation /elevate-ui + /motion-forge: content must never
+     stay hidden waiting on an animation that's just been zeroed out —
+     scroll-reveal elements snap straight to their visible end state. */
+  .reveal { opacity: 1 !important; transform: none !important; }
+}
+
+/* ─── Design Tokens ─────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* Light theme — "Paper" */
+    --color-background: #f5f0e8;
+    --color-foreground: #0d0d0d;
+    --color-ink: #0d0d0d;
+    --color-paper: #f5f0e8;
+    --color-accent: #e8400a;
+    --color-accent-foreground: #ffffff;
+    --color-border: rgba(13, 13, 13, 0.12);
+    --color-input: rgba(13, 13, 13, 0.08);
+    --color-ring: #e8400a;
+    --color-muted: #f0ebe0;
+    --color-muted-foreground: #6b6560;
+    --color-card: #ffffff;
+    --color-card-foreground: #0d0d0d;
+    --color-sidebar: #1a1a1a;
+    --color-sidebar-foreground: #f5f0e8;
+    --color-sidebar-border: rgba(255, 255, 255, 0.08);
+
+    /* Status colors */
+    --color-success: #1a7a45;
+    --color-success-bg: #e3f4ec;
+    --color-warning: #d46000;
+    --color-warning-bg: #fff3e0;
+    --color-error: #c0301a;
+    --color-error-bg: #fde8e5;
+    --color-info: #1a4fff;
+    --color-info-bg: #e8eeff;
+
+    /* premium-ui-elevation /elevate-ui: layered depth (structural highlight
+       + hairline ring + soft diffuse drop) replacing flat `border +
+       shadow-md/lg` utilities. Light theme: a bright top-edge catch light
+       since surfaces here are white-on-cream. */
+    --elev-1:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.7),
+      0 0 0 1px rgb(13 13 13 / 0.04),
+      0 1px 2px 0 rgb(13 13 13 / 0.03),
+      0 4px 12px -2px rgb(13 13 13 / 0.06);
+    --elev-1-hover:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.8),
+      0 0 0 1px rgb(13 13 13 / 0.06),
+      0 2px 4px 0 rgb(13 13 13 / 0.04),
+      0 8px 20px -4px rgb(13 13 13 / 0.09);
+
+    /* premium-ui-elevation /elevate-ui: shared timing tokens (Section 2). */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --stagger: 40ms;
+  }
+
+  .dark {
+    /* Dark theme — "Ink" (default) */
+    --color-background: #0d0d0d;
+    --color-foreground: #f5f0e8;
+    --color-ink: #f5f0e8;
+    --color-paper: #0d0d0d;
+    --color-accent: #e8400a;
+    --color-accent-foreground: #ffffff;
+    --color-border: rgba(245, 240, 232, 0.1);
+    --color-input: rgba(245, 240, 232, 0.06);
+    --color-ring: #e8400a;
+    --color-muted: #1a1a1a;
+    --color-muted-foreground: #8a8480;
+    --color-card: #141414;
+    --color-card-foreground: #f5f0e8;
+    --color-sidebar: #111111;
+    --color-sidebar-foreground: #e0dbd3;
+    --color-sidebar-border: rgba(255, 255, 255, 0.06);
+
+    /* Bug fix (found during the premium-ui-elevation pass on the
+       super-admin dashboard, but real everywhere): status colors
+       (success/warning/error/info + their -bg pairs) were only ever
+       defined once, in :root, with no .dark override anywhere in this
+       file. Every one of the -bg values is a pale, fully-opaque pastel
+       designed to sit under dark text on a light surface (e.g.
+       --color-error-bg: #fde8e5, a light pink) — used as-is in dark
+       mode, every Badge success/warning/error/info variant renders a
+       bright pastel block against the rest of a near-black UI. Dark
+       equivalents below keep each hue's identity (so "error" still
+       reads as the same red-orange family in both themes) while
+       inverting the light/dark relationship: deep desaturated
+       backgrounds, brightened foregrounds for contrast against them —
+       not a mechanical invert, since that would wreck the actual hues. */
+    --color-success: #34b870;
+    --color-success-bg: #16301f;
+    --color-warning: #e8820a;
+    --color-warning-bg: #2e1d08;
+    --color-error: #e8503a;
+    --color-error-bg: #301410;
+    --color-info: #4d7fff;
+    --color-info-bg: #10172e;
+
+    /* premium-ui-elevation /elevate-ui: dark variant is tinted with the
+       brand accent rather than plain grey/white — a flat white top-edge
+       on a near-black surface reads as a stray highlight, not light
+       hitting a rim. Same 3-layer structure as light: highlight, hairline
+       ring, diffuse drop — just deeper and warmer. */
+    --elev-1:
+      inset 0 1px 0 0 color-mix(in srgb, var(--color-accent) 12%, rgb(255 255 255 / 0.05)),
+      0 0 0 1px rgb(255 255 255 / 0.05),
+      0 1px 2px 0 rgb(0 0 0 / 0.3),
+      0 8px 24px -4px rgb(0 0 0 / 0.55);
+    --elev-1-hover:
+      inset 0 1px 0 0 color-mix(in srgb, var(--color-accent) 20%, rgb(255 255 255 / 0.07)),
+      0 0 0 1px rgb(255 255 255 / 0.08),
+      0 2px 4px 0 rgb(0 0 0 / 0.35),
+      0 14px 32px -6px rgb(0 0 0 / 0.6);
+  }
+
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted-foreground);
+  }
+
+  /* Focus visible only for keyboard navigation */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ─── Skeleton loading shimmer ──────────────────────────────────────────────── */
+
+@layer components {
+  /* premium-ui-elevation /elevate-ui (Section 2, performance): this
+     previously animated `background-position` on a 200%-wide gradient
+     — a paint-triggering property, not a compositor-only one. Same
+     visual result (a light band sweeping across a muted base), now
+     done as a `transform: translateX()` sweep of an absolutely
+     positioned overlay, which the compositor can run independently of
+     layout/paint. `overflow: hidden` on the base element clips the
+     overlay to the skeleton's own rounded shape. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-muted);
+    border-radius: 3px;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-input),
+      transparent
+    );
+    animation: shimmer-sweep 1.5s infinite;
+    animation-timing-function: var(--ease-out);
+  }
+
+  @keyframes shimmer-sweep {
+    100% { transform: translateX(100%); }
+  }
+}
+
+/* ─── Scroll-reveal (premium-ui-elevation /elevate-ui) ─────────────────────── */
+/* Paired with components/ui/reveal.tsx. Transform/opacity only — both are
+   compositor-only properties, no layout or paint triggered per frame. */
+
+@layer components {
+  .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.5s var(--ease-out), transform 0.5s var(--ease-out);
+  }
+
+  .reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Elevated surfaces (premium-ui-elevation /elevate-ui) ─────────────────── */
+/* Replaces flat `border border-border` cards/rows with the layered
+   --elev-1 treatment (structural highlight + hairline ring + diffuse
+   drop). Hover swaps to --elev-1-hover with a small lift — transform +
+   box-shadow only, both compositor/paint-cheap, no layout impact. */
+
+@layer components {
+  .elevated-card {
+    box-shadow: var(--elev-1);
+    transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+
+  .elevated-card:hover {
+    box-shadow: var(--elev-1-hover);
+    transform: translateY(-1px);
+  }
+
+  /* Static-depth variant of .elevated-card for large containers (data
+     tables, multi-row panels) — same layered shadow, no hover response.
+     A whole table lifting 1px whenever any row is hovered is motion
+     without meaning; hover lift is for compact discrete items. */
+  .elevated-surface {
+    box-shadow: var(--elev-1);
+  }
+
+  /* premium-ui-elevation /elevate-ui: a data-arrival stagger, distinct
+     from .reveal above — NOT scroll-gated. For above-the-fold content
+     (e.g. a stat-card grid) that shouldn't wait on IntersectionObserver
+     to appear at all; it just plays once, staggered by index, the
+     moment the data that fills it resolves. Named distinctly from the
+     pre-existing `animate-slide-up` utility (which is — a pre-existing,
+     separate issue — defined twice in this codebase: once here as a
+     plain CSS class, again in tailwind.config.ts's theme.extend, with
+     different distances/timings; reusing that name would inherit
+     whichever one wins the collision. Not resolved here to avoid
+     touching that utility's other call sites' behavior as a side
+     effect of this pass — flagged as a follow-up instead.) */
+  .mount-rise {
+    animation: mount-rise 0.4s var(--ease-out) backwards;
+  }
+
+  @keyframes mount-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* premium-ui-elevation /elevate-ui: replaces hardcoded `border-red-500/
+     30 bg-red-500/5` with a proper token-derived tint. --color-error-bg
+     is a flat, fully-opaque pale pink defined only for light theme (no
+     dark-mode override exists in this codebase) — using it as-is here
+     would render an incongruous light-pink block in dark mode. Deriving
+     a translucent tint from --color-error itself (a saturated red-orange
+     defined the same way in both themes) via color-mix adapts correctly
+     to either background instead. */
+  .stat-card-alert {
+    background: color-mix(in srgb, var(--color-error) 6%, transparent);
+    box-shadow: var(--elev-1), inset 0 0 0 1px color-mix(in srgb, var(--color-error) 25%, transparent);
+  }
+
+  /* Same token-derived-tint reasoning as .stat-card-alert above, but for
+     a row inside an already-shadowed shared container — no box-shadow
+     of its own, just the background tint. */
+  .row-alert {
+    background: color-mix(in srgb, var(--color-error) 5%, transparent);
+  }
+
+  /* Same token-derived reasoning again, for the destructive-icon circle
+     in ConfirmActionDialog. */
+  .alert-icon-bg {
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+
+  /* premium-ui-elevation /elevate-ui: ConfirmActionDialog's entrance —
+     spring easing per Section 1C's modal guidance (scale from ~96% +
+     fade), used via Tailwind's animate-[dialog-in_...] arbitrary value. */
+  @keyframes dialog-in {
+    from { opacity: 0; transform: scale(0.96) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* premium-ui-elevation /elevate-ui: exit direction, now that
+     ConfirmActionDialog runs on Radix Dialog — Radix keeps Content
+     mounted until this finishes (driven by its data-state="closed"
+     attribute), which `if (!open) return null` could never support.
+     Faster and linear-ish rather than spring: an exiting element
+     doesn't need the same "arriving with a little overshoot" character
+     an entrance does, and a bouncy exit reads as sluggish since the
+     user's already moved on by the time it settles. */
+  @keyframes dialog-out {
+    from { opacity: 1; transform: scale(1) translateY(0); }
+    to { opacity: 0; transform: scale(0.96) translateY(4px); }
+  }
+
+  /* Exit companion to Tailwind's config-based fade-in, for the same
+     reason — used on Dialog.Overlay's data-[state=closed]. */
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+}
+
+/* ─── Prose overrides for documents ────────────────────────────────────────── */
+
+@layer components {
+  .prose-collabos {
+    @apply prose prose-sm max-w-none;
+    --tw-prose-body: var(--color-foreground);
+    --tw-prose-headings: var(--color-foreground);
+    --tw-prose-links: var(--color-accent);
+    --tw-prose-bold: var(--color-foreground);
+    --tw-prose-code: var(--color-accent);
+    --tw-prose-pre-bg: var(--color-muted);
+    --tw-prose-borders: var(--color-border);
+  }
+}
+
+/* ── Marketing site animations ──────────────────────────────────────────── */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 32s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* ── Dropdown / sheet entrance animations ───────────────────────────────── */
+/* Bug fix (found while investigating the premium-ui-elevation pass):
+   `.animate-slide-down`/`.animate-slide-up` were defined TWICE — once
+   here as plain unlayered CSS, once in tailwind.config.ts's
+   theme.extend (different distances: 8px/16px here vs 4px there).
+   Checked the actual production build output to see which one really
+   applies: only ONE `@keyframes` survives per name in the final
+   compiled CSS (keyframes don't merge — the last one wins entirely for
+   every usage of that name), and it was tailwind.config.ts's 4px
+   version, both times. That meant every one of the 7 real usages across
+   the app — toasts, create-task/channel modals, search modal, command
+   palette, notification-bell's dropdown, AND mobile-more-sheet's bottom
+   sheet — was already running on the 4px version regardless of which
+   class rule it referenced. This globals.css version was fully dead
+   code; removed rather than left as a confusing, never-applied second
+   definition. tailwind.config.ts's version is now the single source of
+   truth for animate-slide-up/animate-slide-down.
+
+   The one real casualty: mobile-more-sheet.tsx's bottom sheet was built
+   specifically wanting a 16px rise (a full sheet sliding up off-screen
+   reads as intentional at that distance; 4px — appropriate for a small
+   dropdown — reads as barely-there for something covering the bottom
+   of the viewport). Rather than resolve the collision by changing the
+   shared utility's distance (which would alter the other six already-
+   correct call sites' behavior as a side effect), it gets its own
+   distinctly-named animation below instead. */
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-sheet-up {
+  animation: sheet-up 0.2s var(--ease-out);
+}

@@ -44,6 +44,9 @@ build/Release
 # Typescript v1 declaration files
 typings/
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # dotenv environment variables file
 .env
 

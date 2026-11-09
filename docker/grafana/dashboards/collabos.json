@@ -1,0 +1,93 @@
+{
+  "title": "CollabOS Overview",
+  "uid": "collabos-overview",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "title": "Request Rate (req/s)",
+      "type": "stat",
+      "targets": [{ "expr": "sum(rate(http_requests_total[5m]))", "legendFormat": "req/s" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "thresholds": { "steps": [{"color":"green"},{"color":"yellow","value":100},{"color":"red","value":500}] } } }
+    },
+    {
+      "id": 2, "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "title": "Error Rate",
+      "type": "stat",
+      "targets": [{ "expr": "sum(rate(http_errors_total[5m])) / sum(rate(http_requests_total[5m])) * 100", "legendFormat": "%" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "steps": [{"color":"green"},{"color":"yellow","value":1},{"color":"red","value":5}] } } }
+    },
+    {
+      "id": 3, "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "title": "P95 Latency",
+      "type": "stat",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket[5m])) by (le))", "legendFormat": "ms" }],
+      "fieldConfig": { "defaults": { "unit": "ms", "thresholds": { "steps": [{"color":"green"},{"color":"yellow","value":500},{"color":"red","value":2000}] } } }
+    },
+    {
+      "id": 4, "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "title": "Active WS Connections",
+      "type": "stat",
+      "targets": [{ "expr": "ws_connections_active", "legendFormat": "connections" }],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 5, "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "title": "Heap Used",
+      "type": "stat",
+      "targets": [{ "expr": "node_heap_used_bytes", "legendFormat": "bytes" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "id": 6, "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "title": "Uptime",
+      "type": "stat",
+      "targets": [{ "expr": "process_uptime_seconds", "legendFormat": "s" }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 10, "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "title": "HTTP Request Rate by Status",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{status=~\"2..\"}[1m]))", "legendFormat": "2xx" },
+        { "expr": "sum(rate(http_requests_total{status=~\"4..\"}[1m]))", "legendFormat": "4xx" },
+        { "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m]))", "legendFormat": "5xx" }
+      ]
+    },
+    {
+      "id": 20, "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "title": "Job Queue Depths",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "job_queue_waiting{queue=\"email\"}", "legendFormat": "email waiting" },
+        { "expr": "job_queue_waiting{queue=\"notifications\"}", "legendFormat": "notifications waiting" },
+        { "expr": "job_queue_waiting{queue=\"search-index\"}", "legendFormat": "search-index waiting" },
+        { "expr": "job_queue_waiting{queue=\"embeddings\"}", "legendFormat": "embeddings waiting" },
+        { "expr": "job_queue_waiting{queue=\"webhooks\"}", "legendFormat": "webhooks waiting" }
+      ]
+    },
+    {
+      "id": 21, "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "title": "Failed Jobs",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "job_queue_failed{queue=\"email\"}", "legendFormat": "email" },
+        { "expr": "job_queue_failed{queue=\"notifications\"}", "legendFormat": "notifications" },
+        { "expr": "job_queue_failed{queue=\"webhooks\"}", "legendFormat": "webhooks" },
+        { "expr": "job_queue_failed{queue=\"transcode\"}", "legendFormat": "transcode" }
+      ]
+    },
+    {
+      "id": 30, "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "title": "Application Logs",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "Loki" },
+      "targets": [{ "expr": "{service=\"api\"} |= \"\"", "legendFormat": "" }],
+      "options": { "dedupStrategy": "none", "showLabels": false, "wrapLogMessage": true }
+    }
+  ]
+}

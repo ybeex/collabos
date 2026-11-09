@@ -1,0 +1,38 @@
+# LiveKit server configuration
+# Docs: https://docs.livekit.io/realtime/self-hosting/local/
+
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # In production, set these to your server's public IP
+  # use_external_ip: true
+  # ips:
+  #   - "YOUR_SERVER_PUBLIC_IP"
+
+# TURN server configuration — point to your coturn instance
+# In production, replace localhost with your server's public hostname
+turn:
+  enabled: true
+  domain: localhost
+  tls_port: 5349
+  udp_port: 3478
+  external_tls: false
+
+# Keys are loaded from LIVEKIT_KEYS env var
+# Format: "api_key: api_secret"
+
+# Room defaults
+room:
+  max_participants: 50
+  empty_timeout: 300      # Close room after 5 minutes with no participants
+  departure_timeout: 20   # Wait 20s before removing disconnected participant
+  enable_remote_unmute: true
+
+# Recording — disabled by default (requires egress service)
+egress:
+  s3:
+    enabled: false
+
+# Logging
+log_level: info

@@ -1,0 +1,162 @@
+version: '3.9'
+
+# Self-hosted observability stack — all free, no vendor accounts needed.
+# Start: docker compose -f docker/observability.yml up -d
+# Grafana:   http://localhost:3030  (admin / admin — change on first login)
+# Prometheus: http://localhost:9090
+# GlitchTip:  http://localhost:8000
+# Mailpit (dev email): http://localhost:8025
+
+services:
+
+  # ── Prometheus — metrics scraping ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:9090/-/healthy']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Grafana — dashboards ───────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    ports:
+      - '3030:3000'
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_SERVER_ROOT_URL: http://localhost:3030
+      GF_SMTP_ENABLED: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+      - loki
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Loki — log aggregation ─────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.1.0
+    restart: unless-stopped
+    ports:
+      - '3100:3100'
+    volumes:
+      - ./loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3100/ready']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Promtail — log shipping from Docker containers ─────────────────────────
+  promtail:
+    image: grafana/promtail:3.1.0
+    restart: unless-stopped
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./loki/promtail.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # ── GlitchTip — open source Sentry alternative for error tracking ──────────
+  glitchtip_db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:-glitchtip_dev}
+    volumes:
+      - glitchtip_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U glitchtip']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  glitchtip_redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - glitchtip_redis_data:/data
+
+  glitchtip:
+    image: glitchtip/glitchtip:v4.0
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-glitchtip_dev}@glitchtip_db:5432/glitchtip
+      REDIS_URL: redis://glitchtip_redis:6379
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-change_this_in_production_min_50_chars_xxxxxxxxxx}
+      PORT: 8000
+      EMAIL_URL: smtp://localhost:1025
+      GLITCHTIP_DOMAIN: http://localhost:8000
+      DEFAULT_FROM_EMAIL: errors@collabos.io
+      CELERY_WORKER_AUTOSCALE: '1,3'
+      ENABLE_OPEN_USER_REGISTRATION: 'False'
+    depends_on:
+      glitchtip_db:
+        condition: service_healthy
+      glitchtip_redis:
+        condition: service_started
+
+  glitchtip_worker:
+    image: glitchtip/glitchtip:v4.0
+    restart: unless-stopped
+    command: ./bin/run-celery-with-beat.sh
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-glitchtip_dev}@glitchtip_db:5432/glitchtip
+      REDIS_URL: redis://glitchtip_redis:6379
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-change_this_in_production_min_50_chars_xxxxxxxxxx}
+    depends_on:
+      glitchtip_db:
+        condition: service_healthy
+      glitchtip_redis:
+        condition: service_started
+
+  # ── Mailpit — local SMTP + web UI for dev email ────────────────────────────
+  mailpit:
+    image: axllent/mailpit:v1.18
+    restart: unless-stopped
+    ports:
+      - '1025:1025'   # SMTP
+      - '8025:8025'   # Web UI
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  glitchtip_db_data:
+  glitchtip_redis_data:

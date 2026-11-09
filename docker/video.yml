@@ -1,0 +1,45 @@
+version: '3.9'
+
+# Self-hosted video calling stack — free, no vendor accounts needed.
+# LiveKit: open source WebRTC SFU (Selective Forwarding Unit)
+# coturn: open source TURN/STUN server for NAT traversal
+#
+# Start: docker compose -f docker/video.yml up -d
+# LiveKit dashboard: http://localhost:7880
+
+services:
+
+  # ── LiveKit server — WebRTC SFU ───────────────────────────────────────────
+  livekit:
+    image: livekit/livekit-server:v1.7
+    restart: unless-stopped
+    ports:
+      - '7880:7880'     # HTTP + WebSocket API
+      - '7881:7881'     # RTC TCP (fallback when UDP blocked)
+      - '7882:7882/udp' # RTC UDP (primary media transport)
+    volumes:
+      - ./livekit/livekit.yml:/etc/livekit/livekit.yml:ro
+    command: --config /etc/livekit/livekit.yml
+    environment:
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret_min32chars_xxxxxxxxxxxxxxxx}'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:7880/']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── coturn — TURN/STUN server ─────────────────────────────────────────────
+  # Required: ~30% of WebRTC connections fail without TURN due to NAT/firewall.
+  # coturn is free, open source, runs as a single container.
+  coturn:
+    image: coturn/coturn:4.6.2
+    restart: unless-stopped
+    network_mode: host  # TURN requires host networking for correct IP detection
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: -c /etc/coturn/turnserver.conf
+    healthcheck:
+      test: ['CMD-SHELL', 'turnutils_stunclient 127.0.0.1 || exit 0']
+      interval: 30s
+      timeout: 10s
+      retries: 3

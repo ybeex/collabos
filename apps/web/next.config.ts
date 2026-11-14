@@ -6,7 +6,7 @@ const config: NextConfig = {
   webpack(config) {
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@collabos/shared': path.resolve(process.cwd(), '../../packages/shared/dist/index.js'),
+      '@collabos/shared': path.resolve(process.cwd(), '../../packages/shared/src/index.ts'),
     }
     return config
   },

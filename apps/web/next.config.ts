@@ -1,7 +1,15 @@
+import path from 'node:path'
 import type { NextConfig } from 'next'
 
 const config: NextConfig = {
   reactStrictMode: true,
+  webpack(config) {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@collabos/shared': path.resolve(process.cwd(), '../../packages/shared/dist/index.js'),
+    }
+    return config
+  },
   poweredByHeader: false,
   compress: true,
   images: {
